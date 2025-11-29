@@ -33,14 +33,12 @@ export default function StoneDailyReport() {
   const [sizes, setSizes] = useState([]);
   const [showSizes, setShowSizes] = useState(false);
   const [showVids, setShowVids] = useState(false);
-
-  // NEW: Состояние для ошибок формы
   const [formError, setFormError] = useState("");
 
-  // Загружаем список сотрудников (фамилий) и номенклатуру при загрузке
+  // загрузка сотрудников и номенклатуры
   useEffect(() => {
     async function fetchSheets() {
-      const res = await fetch('https://lpaderina.store/webhook/rabotniki');
+      const res = await fetch("https://lpaderina.store/webhook/rabotniki");
       const dataSheets = await res.json();
       if (dataSheets.list_name) {
         setSheetOptions(JSON.parse(dataSheets.list_name));
@@ -53,7 +51,7 @@ export default function StoneDailyReport() {
       }
     }
     async function fetchNomenclature() {
-      const resNomenclature = await fetch('https://lpaderina.store/webhook/nomenklatura');
+      const resNomenclature = await fetch("https://lpaderina.store/webhook/nomenklatura");
       const dataNomenclature = await resNomenclature.json();
       setBySize(dataNomenclature.bySize || {});
       setSizes(Object.keys(dataNomenclature.bySize || {}));
@@ -62,7 +60,71 @@ export default function StoneDailyReport() {
     fetchNomenclature();
   }, []);
 
-  // При выборе фамилии подгружаем задания и дату
+  // форматирование даты для бэка (если нужно DD.MM.YYYY)
+  const formatDateForBackend = (isoDate) => {
+    if (!isoDate) return "";
+    const [year, month, day] = isoDate.split("-");
+    return `${day}.${month}.${year}`;
+  };
+
+  // общий метод: загрузить задания по дате и фамилии
+  const loadDailyTask = async (dateIso, sheet) => {
+    if (!dateIso || !sheet) return;
+
+    setShowSuccess(false);
+    setFormError("");
+
+    const dateToSend = formatDateForBackend(dateIso); // или dateIso, если бэк ждёт YYYY-MM-DD
+
+    try {
+      const res = await fetch(
+        "https://lpaderina.store/webhook/daily_task_sasha",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sheet,
+            date: dateToSend,
+          }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setPositions(data);
+        } else {
+          setPositions(data.positions || []);
+        }
+      } else {
+        setPositions([]);
+      }
+    } catch (e) {
+      setPositions([]);
+    }
+  };
+
+  // смена даты — фамилия не сбрасывается, но если она уже выбрана, дергаем вебхук
+  const handleDateChange = async (e) => {
+    const value = e.target.value; // YYYY-MM-DD
+    setReportDate(value);
+    setFormError("");
+    setShowSuccess(false);
+    setEditIndex(null);
+    setIsAdding(false);
+    setKolvo("");
+    setSizeInput("");
+    setVidInput("");
+
+    if (selectedSheet && value) {
+      await loadDailyTask(value, selectedSheet);
+    } else {
+      // если фамилии нет — очищаем позиции, чтобы не висели старые
+      setPositions([]);
+    }
+  };
+
+  // смена фамилии — можно менять всегда, вебхук вызываем, если дата уже есть
   const handleSelectSheet = async (e) => {
     const value = e.target.value;
     setSelectedSheet(value);
@@ -71,50 +133,38 @@ export default function StoneDailyReport() {
     setKolvo("");
     setSizeInput("");
     setVidInput("");
-    setPositions([]);
-    setReportDate("");
-    setFormError(""); // NEW
+    setFormError("");
+    setShowSuccess(false);
 
-    if (value) {
-      const res = await fetch('https://lpaderina.store/webhook/daily_task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sheet: value }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setPositions(data);
-          setReportDate(data[0]?.date || "");
-        } else {
-          setPositions(data.positions || []);
-          setReportDate(data.positions?.[0]?.date || "");
-        }
-      } else {
-        setPositions([]);
-        setReportDate("");
-      }
+    if (value && reportDate) {
+      await loadDailyTask(reportDate, value);
+    } else {
+      setPositions([]);
     }
   };
 
-  // NEW: Проверка на дубль по размеру и виду
+  // проверка дубля
   function isDuplicate(size, vid, ignoreIndex = null) {
-    return positions.some((pos, idx) =>
-      idx !== ignoreIndex && pos.size === size && pos.vid === vid
+    return positions.some(
+      (pos, idx) => idx !== ignoreIndex && pos.size === size && pos.vid === vid
     );
   }
 
-  // Сохранить новую или отредактированную позицию (с проверкой дубля)
   const handleSave = () => {
-    setFormError(""); // NEW
+    setFormError("");
 
-    // Добавление новой позиции
+    // добавление
     if (editIndex === null && sizeInput && vidInput && kolvo) {
       if (isDuplicate(sizeInput, vidInput)) {
-        setFormError("Такая позиция уже добавлена. Вы можете её отредактировать.");
+        setFormError(
+          "Такая позиция уже добавлена. Вы можете её отредактировать."
+        );
         return;
       }
-      setPositions([...positions, { size: sizeInput, vid: vidInput, qty: kolvo }]);
+      setPositions([
+        ...positions,
+        { size: sizeInput, vid: vidInput, qty: kolvo },
+      ]);
       setSizeInput("");
       setVidInput("");
       setKolvo("");
@@ -122,7 +172,7 @@ export default function StoneDailyReport() {
       return;
     }
 
-    // Редактирование позиции
+    // редактирование
     if (editIndex !== null && kolvo) {
       const editingSize = positions[editIndex].size;
       const editingVid = positions[editIndex].vid;
@@ -140,17 +190,15 @@ export default function StoneDailyReport() {
     }
   };
 
-  // Для добавления новой позиции
   const handleAddPosition = () => {
     setEditIndex(null);
     setIsAdding(true);
     setSizeInput("");
     setVidInput("");
     setKolvo("");
-    setFormError(""); // NEW
+    setFormError("");
   };
 
-  // Для редактирования существующей позиции
   const handleEditPosition = (index) => {
     const pos = positions[index];
     setKolvo(pos.qty);
@@ -158,10 +206,9 @@ export default function StoneDailyReport() {
     setIsAdding(true);
     setSizeInput(pos.size);
     setVidInput(pos.vid);
-    setFormError(""); // NEW
+    setFormError("");
   };
 
-  // Удалить позицию
   const handleDeletePosition = (index) => {
     const updated = [...positions];
     updated.splice(index, 1);
@@ -171,25 +218,29 @@ export default function StoneDailyReport() {
     setSizeInput("");
     setVidInput("");
     setKolvo("");
-    setFormError(""); // NEW
+    setFormError("");
   };
 
-  // Отправить данные
   const handleSubmit = async () => {
-    const positionsToSend = positions.map(pos => ({
+    const positionsToSend = positions.map((pos) => ({
       ...pos,
-      qty: Number(pos.qty)
+      qty: Number(pos.qty),
     }));
 
-    await fetch('https://lpaderina.store/webhook/70e744f0-35d8-4252-ba73-25db1d52dbf9', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        positions: positionsToSend,
-        sheet: selectedSheet,
-        date: reportDate,
-      }),
-    });
+    const dateToSend = formatDateForBackend(reportDate);
+
+    await fetch(
+      "https://lpaderina.store/webhook/plan_bot_sasha",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          positions: positionsToSend,
+          sheet: selectedSheet,
+          date: dateToSend,
+        }),
+      }
+    );
     setShowSuccess(true);
     setPositions([]);
     setEditIndex(null);
@@ -198,7 +249,6 @@ export default function StoneDailyReport() {
     setTimeout(() => setShowSuccess(false), 4000);
   };
 
-  // Фильтрация для выпадающих списков
   const filteredSizes = sizes.filter((s) =>
     s.toLowerCase().includes(sizeInput.toLowerCase())
   );
@@ -209,56 +259,90 @@ export default function StoneDailyReport() {
 
   return (
     <div className="daily-form-main">
-      {/* Фамилия: select до выбора, read-only после выбора */}
+      {/* 1. Дата */}
       <div className="daily-title">
-        <label>Фамилия</label>
-        {!selectedSheet ? (
-          <select
-            className="daily-input"
-            value={selectedSheet}
-            onChange={handleSelectSheet}
-          >
-            <option value="">Фамилия...</option>
-            {sheetOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            className="daily-input"
-            value={sheetOptions.find(opt => opt.value === selectedSheet)?.label || selectedSheet}
-            readOnly
-            style={{ background: "#f1f5f9", color: "#2d3748", fontWeight: 500 }}
-          />
-        )}
+        <label>Дата</label>
+        <input
+          type="date"
+          className="daily-input"
+          value={reportDate}
+          onChange={handleDateChange}
+        />
       </div>
 
-      {/* Остальная форма: только если выбрана фамилия */}
-      {selectedSheet && (
+      {/* 2. Фамилия — всегда селект, можно менять в любой момент */}
+      <div className="daily-title" style={{ marginTop: 16 }}>
+        <label>Фамилия</label>
+        <select
+          className="daily-input"
+          value={selectedSheet}
+          onChange={handleSelectSheet}
+        >
+          <option value="">Фамилия...</option>
+
+          {sheetOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {formError && !isAdding && (
+        <div
+          style={{
+            color: "#dc2626",
+            background: "#fee2e2",
+            padding: "6px 12px",
+            borderRadius: 8,
+            fontSize: 15,
+            marginTop: 8,
+          }}
+        >
+          {formError}
+        </div>
+      )}
+
+      {/* остальная форма — только если и дата, и фамилия выбраны */}
+      {selectedSheet && reportDate && (
         <>
           {showSuccess ? (
             <div>
-              <div className="daily-title">Дата: {reportDate || "—"}</div>
-              <div className="daily-sub" style={{ marginTop: 40, fontSize: 24, textAlign: "center", color: "#22c55e" }}>
+              <div className="daily-title">
+                Дата: {formatDateForBackend(reportDate) || "—"}
+              </div>
+              <div
+                className="daily-sub"
+                style={{
+                  marginTop: 40,
+                  fontSize: 24,
+                  textAlign: "center",
+                  color: "#22c55e",
+                }}
+              >
                 Спасибо за твой труд!
               </div>
             </div>
           ) : (
             <>
-              <div className="daily-title">Дата: {reportDate || "—"}</div>
+              <div className="daily-title">
+                Дата: {formatDateForBackend(reportDate) || "—"}
+              </div>
               <div className="daily-sub">Список позиций:</div>
 
-              {/* Показываем подсказку если нет позиций, но дата уже есть */}
               {((!positions.length && reportDate) ||
-                (positions.length === 1 && !positions[0].size && !positions[0].vid && !positions[0].qty)) && (
-                <div style={{
-                  margin: '16px 0',
-                  textAlign: 'center',
-                  color: '#999',
-                  fontSize: 18
-                }}>
+                (positions.length === 1 &&
+                  !positions[0].size &&
+                  !positions[0].vid &&
+                  !positions[0].qty)) && (
+                <div
+                  style={{
+                    margin: "16px 0",
+                    textAlign: "center",
+                    color: "#999",
+                    fontSize: 18,
+                  }}
+                >
                   Добавь позиции вручную
                 </div>
               )}
@@ -271,7 +355,13 @@ export default function StoneDailyReport() {
                         <span>
                           {pos.size} {pos.vid} — {pos.qty} шт.
                         </span>
-                        <span style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+                        <span
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            marginLeft: "auto",
+                          }}
+                        >
                           <button
                             className="icon-btn"
                             title="Редактировать"
@@ -289,11 +379,16 @@ export default function StoneDailyReport() {
                         </span>
                       </li>
                     )}
-                    {/* Режим редактирования позиции */}
                     {isAdding && editIndex === i && (
                       <li>
-                        <div className="daily-edit-form" style={{ marginTop: 8, marginBottom: 10 }}>
-                          <div className="daily-field" style={{ position: "relative" }}>
+                        <div
+                          className="daily-edit-form"
+                          style={{ marginTop: 8, marginBottom: 10 }}
+                        >
+                          <div
+                            className="daily-field"
+                            style={{ position: "relative" }}
+                          >
                             <label>Размер</label>
                             <input
                               type="text"
@@ -303,7 +398,10 @@ export default function StoneDailyReport() {
                               disabled
                             />
                           </div>
-                          <div className="daily-field" style={{ position: "relative" }}>
+                          <div
+                            className="daily-field"
+                            style={{ position: "relative" }}
+                          >
                             <label>Вид работы</label>
                             <input
                               type="text"
@@ -313,7 +411,10 @@ export default function StoneDailyReport() {
                               disabled
                             />
                           </div>
-                          <div className="daily-field" style={{ position: "relative" }}>
+                          <div
+                            className="daily-field"
+                            style={{ position: "relative" }}
+                          >
                             <label>Количество</label>
                             <input
                               type="number"
@@ -329,19 +430,22 @@ export default function StoneDailyReport() {
                                 onClick={() => setKolvo("")}
                                 tabIndex={-1}
                                 aria-label="Очистить поле"
-                              ><CrossIcon /></button>
+                              >
+                                <CrossIcon />
+                              </button>
                             )}
                           </div>
-                          {/* NEW: Вывод ошибки */}
                           {formError && (
-                            <div style={{
-                              color: "#dc2626",
-                              background: "#fee2e2",
-                              padding: "6px 12px",
-                              borderRadius: 8,
-                              fontSize: 15,
-                              margin: "8px 0"
-                            }}>
+                            <div
+                              style={{
+                                color: "#dc2626",
+                                background: "#fee2e2",
+                                padding: "6px 12px",
+                                borderRadius: 8,
+                                fontSize: 15,
+                                margin: "8px 0",
+                              }}
+                            >
                               {formError}
                             </div>
                           )}
@@ -356,7 +460,12 @@ export default function StoneDailyReport() {
                             <button
                               className="daily-btn-alt daily-btn-small"
                               style={{ marginLeft: 8 }}
-                              onClick={() => { setIsAdding(false); setEditIndex(null); setKolvo(""); setFormError(""); }}
+                              onClick={() => {
+                                setIsAdding(false);
+                                setEditIndex(null);
+                                setKolvo("");
+                                setFormError("");
+                              }}
                             >
                               Завершить редактирование
                             </button>
@@ -366,24 +475,32 @@ export default function StoneDailyReport() {
                     )}
                   </React.Fragment>
                 ))}
-                {/* Форма добавления новой позиции */}
+
                 {isAdding && editIndex === null && (
                   <li>
-                    <div className="daily-edit-form" style={{ marginTop: 8, marginBottom: 10 }}>
-                      <div className="daily-field" style={{ position: "relative" }}>
+                    <div
+                      className="daily-edit-form"
+                      style={{ marginTop: 8, marginBottom: 10 }}
+                    >
+                      <div
+                        className="daily-field"
+                        style={{ position: "relative" }}
+                      >
                         <label>Размер</label>
                         <input
                           type="text"
                           className="daily-input"
                           placeholder="Начните вводить или выберите..."
                           value={sizeInput}
-                          onChange={e => {
+                          onChange={(e) => {
                             setSizeInput(e.target.value);
                             setShowSizes(true);
                             setVidInput("");
                           }}
                           onFocus={() => setShowSizes(true)}
-                          onBlur={() => setTimeout(() => setShowSizes(false), 100)}
+                          onBlur={() =>
+                            setTimeout(() => setShowSizes(false), 100)
+                          }
                           autoComplete="off"
                         />
                         {sizeInput && (
@@ -393,17 +510,21 @@ export default function StoneDailyReport() {
                             onClick={() => setSizeInput("")}
                             tabIndex={-1}
                             aria-label="Очистить поле"
-                          ><CrossIcon /></button>
+                          >
+                            <CrossIcon />
+                          </button>
                         )}
                         <button
                           type="button"
                           className="combo-arrow"
                           tabIndex={-1}
-                          onMouseDown={e => {
+                          onMouseDown={(e) => {
                             e.preventDefault();
-                            setShowSizes(v => !v);
+                            setShowSizes((v) => !v);
                           }}
-                        >▼</button>
+                        >
+                          ▼
+                        </button>
                         {showSizes && filteredSizes.length > 0 && (
                           <div className="daily-list-small">
                             {filteredSizes.map((s, i) => (
@@ -421,21 +542,29 @@ export default function StoneDailyReport() {
                           </div>
                         )}
                       </div>
-                      <div className="daily-field" style={{ position: "relative" }}>
+                      <div
+                        className="daily-field"
+                        style={{ position: "relative" }}
+                      >
                         <label>Вид работы</label>
                         <input
                           type="text"
                           className="daily-input"
                           placeholder="Начните вводить или выберите..."
                           value={vidInput}
-                          onChange={e => {
+                          onChange={(e) => {
                             setVidInput(e.target.value);
                             setShowVids(true);
                           }}
                           onFocus={() => setShowVids(true)}
-                          onBlur={() => setTimeout(() => setShowVids(false), 100)}
+                          onBlur={() =>
+                            setTimeout(() => setShowVids(false), 100)
+                          }
                           autoComplete="off"
-                          disabled={!sizeInput || !(bySize[sizeInput] && bySize[sizeInput].length)}
+                          disabled={
+                            !sizeInput ||
+                            !(bySize[sizeInput] && bySize[sizeInput].length)
+                          }
                         />
                         {vidInput && (
                           <button
@@ -444,17 +573,21 @@ export default function StoneDailyReport() {
                             onClick={() => setVidInput("")}
                             tabIndex={-1}
                             aria-label="Очистить поле"
-                          ><CrossIcon /></button>
+                          >
+                            <CrossIcon />
+                          </button>
                         )}
                         <button
                           type="button"
                           className="combo-arrow"
                           tabIndex={-1}
-                          onMouseDown={e => {
+                          onMouseDown={(e) => {
                             e.preventDefault();
-                            setShowVids(v => !v);
+                            setShowVids((v) => !v);
                           }}
-                        >▼</button>
+                        >
+                          ▼
+                        </button>
                         {showVids && filteredVids.length > 0 && (
                           <div className="daily-list-small">
                             {filteredVids.map((v, i) => (
@@ -471,7 +604,10 @@ export default function StoneDailyReport() {
                           </div>
                         )}
                       </div>
-                      <div className="daily-field" style={{ position: "relative" }}>
+                      <div
+                        className="daily-field"
+                        style={{ position: "relative" }}
+                      >
                         <label>Количество</label>
                         <input
                           type="number"
@@ -487,19 +623,22 @@ export default function StoneDailyReport() {
                             onClick={() => setKolvo("")}
                             tabIndex={-1}
                             aria-label="Очистить поле"
-                          ><CrossIcon /></button>
+                          >
+                            <CrossIcon />
+                          </button>
                         )}
                       </div>
-                      {/* NEW: Вывод ошибки */}
                       {formError && (
-                        <div style={{
-                          color: "#dc2626",
-                          background: "#fee2e2",
-                          padding: "6px 12px",
-                          borderRadius: 8,
-                          fontSize: 15,
-                          margin: "8px 0"
-                        }}>
+                        <div
+                          style={{
+                            color: "#dc2626",
+                            background: "#fee2e2",
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            fontSize: 15,
+                            margin: "8px 0",
+                          }}
+                        >
                           {formError}
                         </div>
                       )}
@@ -514,7 +653,12 @@ export default function StoneDailyReport() {
                         <button
                           className="daily-btn-alt daily-btn-small"
                           style={{ marginLeft: 8 }}
-                          onClick={() => { setIsAdding(false); setEditIndex(null); setKolvo(""); setFormError(""); }}
+                          onClick={() => {
+                            setIsAdding(false);
+                            setEditIndex(null);
+                            setKolvo("");
+                            setFormError("");
+                          }}
                         >
                           Завершить редактирование
                         </button>
@@ -523,6 +667,7 @@ export default function StoneDailyReport() {
                   </li>
                 )}
               </ul>
+
               {!isAdding && (
                 <div className="daily-flex" style={{ marginTop: 18 }}>
                   <button
