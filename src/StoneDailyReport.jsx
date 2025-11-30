@@ -230,7 +230,7 @@ export default function StoneDailyReport() {
     const dateToSend = formatDateForBackend(reportDate);
 
     await fetch(
-      "https://lpaderina.store/webhook/70e744f0-35d8-4252-ba73-25db1d52dbf9",
+      "https://lpaderina.store/webhook/task_sasha",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -320,7 +320,7 @@ export default function StoneDailyReport() {
                   color: "#22c55e",
                 }}
               >
-                Спасибо за твой труд!
+                Задание добавлено!
               </div>
             </div>
           ) : (
