@@ -97,52 +97,55 @@ export default function StoneDailyReport() {
 
   // вебхук для получения наличия по размеру
   const fetchSizeAvailability = async (size) => {
-    if (!size) {
+  if (!size) {
+    setSizeAvailability(null);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      "https://lpaderina.store/webhook/size_availability",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size }),
+      }
+    );
+
+    if (!res.ok) {
       setSizeAvailability(null);
       return;
     }
 
-    try {
-      const res = await fetch(
-        "https://lpaderina.store/webhook/size_availability",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ size }),
-        }
-      );
+    const data = await res.json();
 
-      if (!res.ok) {
-        setSizeAvailability(null);
-        return;
-      }
+    // ожидаем от n8n: [] или [{}] или [{ qty: 5 }]
+    let qty = null;
 
-      const data = await res.json();
-
-      // ожидаем формат от n8n: [] или [ { qty: 5 } ]
-      let qty = null;
-
-      if (Array.isArray(data)) {
-        if (data.length === 0) {
-          // пустой массив — остатка нет
+    if (Array.isArray(data)) {
+      if (data.length === 0) {
+        // пустой массив — остатка нет
+        qty = 0;
+      } else {
+        const first = data[0] || {};
+        if (first && typeof first === "object" && "qty" in first) {
+          qty = first.qty;
+        } else if (Object.keys(first).length === 0) {
+          // первый элемент — пустой объект {} => считаем, что остатка нет
           qty = 0;
-        } else {
-          const first = data[0];
-          if (first && typeof first === "object" && "qty" in first) {
-            qty = first.qty;
-          }
         }
-      } else if (typeof data === "number") {
-        qty = data;
-      } else if (data && typeof data === "object" && "qty" in data) {
-        qty = data.qty;
       }
-
-      setSizeAvailability(qty);
-    } catch (e) {
-      setSizeAvailability(null);
+    } else if (typeof data === "number") {
+      qty = data;
+    } else if (data && typeof data === "object" && "qty" in data) {
+      qty = data.qty;
     }
-  };
+
+    setSizeAvailability(qty);
+  } catch (e) {
+    setSizeAvailability(null);
+  }
+};
 
   // форматирование даты для бэка (DD.MM.YYYY)
   const formatDateForBackend = (isoDate) => {
