@@ -65,7 +65,7 @@ export default function StoneDailyReport() {
   const [showVids, setShowVids] = useState(false);
   const [formError, setFormError] = useState("");
 
-  // наличие по размеру
+  // наличие по размеру (null — ещё не запрашивали, число — результат)
   const [sizeAvailability, setSizeAvailability] = useState(null);
 
   // загрузка сотрудников и номенклатуры
@@ -97,50 +97,52 @@ export default function StoneDailyReport() {
 
   // вебхук для получения наличия по размеру
   const fetchSizeAvailability = async (size) => {
-  if (!size) {
-    setSizeAvailability(null);
-    return;
-  }
-
-  try {
-    const res = await fetch(
-      "https://lpaderina.store/webhook/size_availability",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ size }),
-      }
-    );
-
-    if (!res.ok) {
+    if (!size) {
       setSizeAvailability(null);
       return;
     }
 
-    const data = await res.json();
+    try {
+      const res = await fetch(
+        "https://lpaderina.store/webhook/size_availability",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ size }),
+        }
+      );
 
-    // адаптация под аутпут n8n: [ { qty: 5 } ]
-    let qty = null;
-
-    if (Array.isArray(data) && data.length > 0) {
-      const first = data[0];
-      if (first && typeof first === "object" && "qty" in first) {
-        qty = first.qty;
+      if (!res.ok) {
+        setSizeAvailability(null);
+        return;
       }
-    } else if (typeof data === "number") {
-      // запасной вариант, если когда-нибудь вернёшь просто число
-      qty = data;
-    } else if (data && typeof data === "object" && "qty" in data) {
-      // или объект { qty: 5 }
-      qty = data.qty;
+
+      const data = await res.json();
+
+      // ожидаем формат от n8n: [] или [ { qty: 5 } ]
+      let qty = null;
+
+      if (Array.isArray(data)) {
+        if (data.length === 0) {
+          // пустой массив — остатка нет
+          qty = 0;
+        } else {
+          const first = data[0];
+          if (first && typeof first === "object" && "qty" in first) {
+            qty = first.qty;
+          }
+        }
+      } else if (typeof data === "number") {
+        qty = data;
+      } else if (data && typeof data === "object" && "qty" in data) {
+        qty = data.qty;
+      }
+
+      setSizeAvailability(qty);
+    } catch (e) {
+      setSizeAvailability(null);
     }
-
-    setSizeAvailability(qty);
-  } catch (e) {
-    setSizeAvailability(null);
-  }
-};
-
+  };
 
   // форматирование даты для бэка (DD.MM.YYYY)
   const formatDateForBackend = (isoDate) => {
@@ -292,7 +294,7 @@ export default function StoneDailyReport() {
     setSizeInput(pos.size);
     setVidInput(pos.vid);
     setFormError("");
-    setSizeAvailability(null); // редактируем только количество
+    setSizeAvailability(null); // при редактировании количества наличие не нужно
   };
 
   const handleDeletePosition = (index) => {
@@ -621,7 +623,7 @@ export default function StoneDailyReport() {
                               <div
                                 key={i}
                                 onMouseDown={() => {
-                                  // именно в момент клика по размеру шлём вебхук
+                                  // именно клик по размеру — отправляем вебхук
                                   setSizeInput(s);
                                   setShowSizes(false);
                                   setVidInput("");
@@ -642,11 +644,17 @@ export default function StoneDailyReport() {
                               color: "#4b5563",
                             }}
                           >
-                            Доступно на складе:{" "}
-                            <span style={{ fontWeight: 600 }}>
-                              {sizeAvailability}
-                            </span>{" "}
-                            шт.
+                            {sizeAvailability === 0 ? (
+                              "Доступного остатка на складе нет"
+                            ) : (
+                              <>
+                                Доступно на складе:{" "}
+                                <span style={{ fontWeight: 600 }}>
+                                  {sizeAvailability}
+                                </span>{" "}
+                                шт.
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
