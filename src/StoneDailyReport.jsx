@@ -35,6 +35,9 @@ export default function StoneDailyReport() {
   const [showVids, setShowVids] = useState(false);
   const [formError, setFormError] = useState("");
 
+  // NEW: состояние для наличия по размеру
+  const [sizeAvailability, setSizeAvailability] = useState(null);
+
   // загрузка сотрудников и номенклатуры
   useEffect(() => {
     async function fetchSheets() {
@@ -59,6 +62,41 @@ export default function StoneDailyReport() {
     fetchSheets();
     fetchNomenclature();
   }, []);
+
+  // NEW: вебхук для получения наличия по размеру
+  const fetchSizeAvailability = async (size) => {
+    if (!size) {
+      setSizeAvailability(null);
+      return;
+    }
+
+    try {
+      const res = await fetch("https://lpaderina.store/webhook/nal", { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size }),
+      });
+
+      if (!res.ok) {
+        setSizeAvailability(null);
+        return;
+      }
+
+      const data = await res.json();
+      // адаптируй под реальный ответ вебхука
+      let qty = null;
+      if (typeof data === "number") {
+        qty = data;
+      } else if (data.qty !== undefined) {
+        qty = data.qty;
+      } else if (data.available !== undefined) {
+        qty = data.available;
+      }
+      setSizeAvailability(qty);
+    } catch (e) {
+      setSizeAvailability(null);
+    }
+  };
 
   // форматирование даты для бэка (если нужно DD.MM.YYYY)
   const formatDateForBackend = (isoDate) => {
@@ -104,7 +142,7 @@ export default function StoneDailyReport() {
     }
   };
 
-  // смена даты — фамилия не сбрасывается, но если она уже выбрана, дергаем вебхук
+  // смена даты
   const handleDateChange = async (e) => {
     const value = e.target.value; // YYYY-MM-DD
     setReportDate(value);
@@ -115,16 +153,16 @@ export default function StoneDailyReport() {
     setKolvo("");
     setSizeInput("");
     setVidInput("");
+    setSizeAvailability(null); // NEW: сбрасываем наличие
 
     if (selectedSheet && value) {
       await loadDailyTask(value, selectedSheet);
     } else {
-      // если фамилии нет — очищаем позиции, чтобы не висели старые
       setPositions([]);
     }
   };
 
-  // смена фамилии — можно менять всегда, вебхук вызываем, если дата уже есть
+  // смена фамилии
   const handleSelectSheet = async (e) => {
     const value = e.target.value;
     setSelectedSheet(value);
@@ -135,6 +173,7 @@ export default function StoneDailyReport() {
     setVidInput("");
     setFormError("");
     setShowSuccess(false);
+    setSizeAvailability(null); // NEW
 
     if (value && reportDate) {
       await loadDailyTask(reportDate, value);
@@ -169,6 +208,7 @@ export default function StoneDailyReport() {
       setVidInput("");
       setKolvo("");
       setIsAdding(false);
+      setSizeAvailability(null); // NEW
       return;
     }
 
@@ -186,6 +226,7 @@ export default function StoneDailyReport() {
       setEditIndex(null);
       setKolvo("");
       setIsAdding(false);
+      // размер не меняем, наличие можно не трогать
       return;
     }
   };
@@ -197,6 +238,7 @@ export default function StoneDailyReport() {
     setVidInput("");
     setKolvo("");
     setFormError("");
+    setSizeAvailability(null); // NEW
   };
 
   const handleEditPosition = (index) => {
@@ -207,6 +249,7 @@ export default function StoneDailyReport() {
     setSizeInput(pos.size);
     setVidInput(pos.vid);
     setFormError("");
+    setSizeAvailability(null); // NEW: при редактировании количества наличие не нужно
   };
 
   const handleDeletePosition = (index) => {
@@ -219,6 +262,7 @@ export default function StoneDailyReport() {
     setVidInput("");
     setKolvo("");
     setFormError("");
+    setSizeAvailability(null); // NEW
   };
 
   const handleSubmit = async () => {
@@ -246,6 +290,7 @@ export default function StoneDailyReport() {
     setEditIndex(null);
     setKolvo("");
     setIsAdding(false);
+    setSizeAvailability(null); // NEW
     setTimeout(() => setShowSuccess(false), 4000);
   };
 
@@ -270,7 +315,7 @@ export default function StoneDailyReport() {
         />
       </div>
 
-      {/* 2. Фамилия — всегда селект, можно менять в любой момент */}
+      {/* 2. Фамилия */}
       <div className="daily-title" style={{ marginTop: 16 }}>
         <label>Фамилия</label>
         <select
@@ -303,7 +348,6 @@ export default function StoneDailyReport() {
         </div>
       )}
 
-      {/* остальная форма — только если и дата, и фамилия выбраны */}
       {selectedSheet && reportDate && (
         <>
           {showSuccess ? (
@@ -465,6 +509,7 @@ export default function StoneDailyReport() {
                                 setEditIndex(null);
                                 setKolvo("");
                                 setFormError("");
+                                setSizeAvailability(null); // NEW
                               }}
                             >
                               Завершить редактирование
@@ -493,9 +538,11 @@ export default function StoneDailyReport() {
                           placeholder="Начните вводить или выберите..."
                           value={sizeInput}
                           onChange={(e) => {
-                            setSizeInput(e.target.value);
+                            const value = e.target.value;
+                            setSizeInput(value);
                             setShowSizes(true);
                             setVidInput("");
+                            setSizeAvailability(null); // NEW: при ручном вводе сбрасываем наличие
                           }}
                           onFocus={() => setShowSizes(true)}
                           onBlur={() =>
@@ -507,7 +554,10 @@ export default function StoneDailyReport() {
                           <button
                             type="button"
                             className="clear-btn"
-                            onClick={() => setSizeInput("")}
+                            onClick={() => {
+                              setSizeInput("");
+                              setSizeAvailability(null); // NEW
+                            }}
                             tabIndex={-1}
                             aria-label="Очистить поле"
                           >
@@ -534,11 +584,29 @@ export default function StoneDailyReport() {
                                   setSizeInput(s);
                                   setShowSizes(false);
                                   setVidInput("");
+                                  fetchSizeAvailability(s); // NEW: запрос наличия при выборе размера
                                 }}
                               >
                                 {s}
                               </div>
                             ))}
+                          </div>
+                        )}
+
+                        {/* NEW: вывод наличия под выпадающим списком */}
+                        {sizeInput && sizeAvailability !== null && (
+                          <div
+                            style={{
+                              marginTop: 6,
+                              fontSize: 13,
+                              color: "#4b5563",
+                            }}
+                          >
+                            Доступно на складе:{" "}
+                            <span style={{ fontWeight: 600 }}>
+                              {sizeAvailability}
+                            </span>{" "}
+                            шт.
                           </div>
                         )}
                       </div>
@@ -658,6 +726,9 @@ export default function StoneDailyReport() {
                             setEditIndex(null);
                             setKolvo("");
                             setFormError("");
+                            setSizeInput("");
+                            setVidInput("");
+                            setSizeAvailability(null); // NEW
                           }}
                         >
                           Завершить редактирование
