@@ -3,18 +3,48 @@ import "./styles.css";
 
 // SVG-иконки
 const PencilIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+  <svg
+    width="18"
+    height="18"
+    fill="none"
+    stroke="#374151"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    viewBox="0 0 24 24"
+  >
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
   </svg>
 );
 const TrashIcon = () => (
-  <svg width="18" height="18" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  <svg
+    width="18"
+    height="18"
+    fill="none"
+    stroke="#dc2626"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    viewBox="0 0 24 24"
+  >
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
   </svg>
 );
 const CrossIcon = () => (
-  <svg width="16" height="16" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  <svg
+    width="16"
+    height="16"
+    fill="none"
+    stroke="#bbb"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    viewBox="0 0 24 24"
+  >
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
 
@@ -35,7 +65,7 @@ export default function StoneDailyReport() {
   const [showVids, setShowVids] = useState(false);
   const [formError, setFormError] = useState("");
 
-  // NEW: состояние для наличия по размеру
+  // наличие по размеру
   const [sizeAvailability, setSizeAvailability] = useState(null);
 
   // загрузка сотрудников и номенклатуры
@@ -54,7 +84,9 @@ export default function StoneDailyReport() {
       }
     }
     async function fetchNomenclature() {
-      const resNomenclature = await fetch("https://lpaderina.store/webhook/nomenklatura");
+      const resNomenclature = await fetch(
+        "https://lpaderina.store/webhook/nomenklatura"
+      );
       const dataNomenclature = await resNomenclature.json();
       setBySize(dataNomenclature.bySize || {});
       setSizes(Object.keys(dataNomenclature.bySize || {}));
@@ -63,7 +95,7 @@ export default function StoneDailyReport() {
     fetchNomenclature();
   }, []);
 
-  // NEW: вебхук для получения наличия по размеру
+  // вебхук для получения наличия по размеру
   const fetchSizeAvailability = async (size) => {
     if (!size) {
       setSizeAvailability(null);
@@ -71,11 +103,14 @@ export default function StoneDailyReport() {
     }
 
     try {
-      const res = await fetch("https://lpaderina.store/webhook/nal", { 
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ size }),
-      });
+      const res = await fetch(
+        "https://lpaderina.store/webhook/size_availability",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ size }),
+        }
+      );
 
       if (!res.ok) {
         setSizeAvailability(null);
@@ -83,6 +118,7 @@ export default function StoneDailyReport() {
       }
 
       const data = await res.json();
+
       // адаптируй под реальный ответ вебхука
       let qty = null;
       if (typeof data === "number") {
@@ -92,13 +128,14 @@ export default function StoneDailyReport() {
       } else if (data.available !== undefined) {
         qty = data.available;
       }
+
       setSizeAvailability(qty);
     } catch (e) {
       setSizeAvailability(null);
     }
   };
 
-  // форматирование даты для бэка (если нужно DD.MM.YYYY)
+  // форматирование даты для бэка (DD.MM.YYYY)
   const formatDateForBackend = (isoDate) => {
     if (!isoDate) return "";
     const [year, month, day] = isoDate.split("-");
@@ -112,7 +149,7 @@ export default function StoneDailyReport() {
     setShowSuccess(false);
     setFormError("");
 
-    const dateToSend = formatDateForBackend(dateIso); // или dateIso, если бэк ждёт YYYY-MM-DD
+    const dateToSend = formatDateForBackend(dateIso);
 
     try {
       const res = await fetch(
@@ -137,7 +174,7 @@ export default function StoneDailyReport() {
       } else {
         setPositions([]);
       }
-    } catch (e) {
+    } catch {
       setPositions([]);
     }
   };
@@ -153,7 +190,7 @@ export default function StoneDailyReport() {
     setKolvo("");
     setSizeInput("");
     setVidInput("");
-    setSizeAvailability(null); // NEW: сбрасываем наличие
+    setSizeAvailability(null);
 
     if (selectedSheet && value) {
       await loadDailyTask(value, selectedSheet);
@@ -173,7 +210,7 @@ export default function StoneDailyReport() {
     setVidInput("");
     setFormError("");
     setShowSuccess(false);
-    setSizeAvailability(null); // NEW
+    setSizeAvailability(null);
 
     if (value && reportDate) {
       await loadDailyTask(reportDate, value);
@@ -208,7 +245,7 @@ export default function StoneDailyReport() {
       setVidInput("");
       setKolvo("");
       setIsAdding(false);
-      setSizeAvailability(null); // NEW
+      setSizeAvailability(null);
       return;
     }
 
@@ -226,7 +263,6 @@ export default function StoneDailyReport() {
       setEditIndex(null);
       setKolvo("");
       setIsAdding(false);
-      // размер не меняем, наличие можно не трогать
       return;
     }
   };
@@ -238,7 +274,7 @@ export default function StoneDailyReport() {
     setVidInput("");
     setKolvo("");
     setFormError("");
-    setSizeAvailability(null); // NEW
+    setSizeAvailability(null);
   };
 
   const handleEditPosition = (index) => {
@@ -249,7 +285,7 @@ export default function StoneDailyReport() {
     setSizeInput(pos.size);
     setVidInput(pos.vid);
     setFormError("");
-    setSizeAvailability(null); // NEW: при редактировании количества наличие не нужно
+    setSizeAvailability(null); // редактируем только количество
   };
 
   const handleDeletePosition = (index) => {
@@ -262,7 +298,7 @@ export default function StoneDailyReport() {
     setVidInput("");
     setKolvo("");
     setFormError("");
-    setSizeAvailability(null); // NEW
+    setSizeAvailability(null);
   };
 
   const handleSubmit = async () => {
@@ -273,24 +309,21 @@ export default function StoneDailyReport() {
 
     const dateToSend = formatDateForBackend(reportDate);
 
-    await fetch(
-      "https://lpaderina.store/webhook/task_sasha",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          positions: positionsToSend,
-          sheet: selectedSheet,
-          date: dateToSend,
-        }),
-      }
-    );
+    await fetch("https://lpaderina.store/webhook/task_sasha", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        positions: positionsToSend,
+        sheet: selectedSheet,
+        date: dateToSend,
+      }),
+    });
     setShowSuccess(true);
     setPositions([]);
     setEditIndex(null);
     setKolvo("");
     setIsAdding(false);
-    setSizeAvailability(null); // NEW
+    setSizeAvailability(null);
     setTimeout(() => setShowSuccess(false), 4000);
   };
 
@@ -509,7 +542,7 @@ export default function StoneDailyReport() {
                                 setEditIndex(null);
                                 setKolvo("");
                                 setFormError("");
-                                setSizeAvailability(null); // NEW
+                                setSizeAvailability(null);
                               }}
                             >
                               Завершить редактирование
@@ -542,7 +575,7 @@ export default function StoneDailyReport() {
                             setSizeInput(value);
                             setShowSizes(true);
                             setVidInput("");
-                            setSizeAvailability(null); // NEW: при ручном вводе сбрасываем наличие
+                            setSizeAvailability(null); // при ручном вводе — сброс
                           }}
                           onFocus={() => setShowSizes(true)}
                           onBlur={() =>
@@ -556,7 +589,7 @@ export default function StoneDailyReport() {
                             className="clear-btn"
                             onClick={() => {
                               setSizeInput("");
-                              setSizeAvailability(null); // NEW
+                              setSizeAvailability(null);
                             }}
                             tabIndex={-1}
                             aria-label="Очистить поле"
@@ -581,10 +614,11 @@ export default function StoneDailyReport() {
                               <div
                                 key={i}
                                 onMouseDown={() => {
+                                  // именно в момент клика по размеру шлём вебхук
                                   setSizeInput(s);
                                   setShowSizes(false);
                                   setVidInput("");
-                                  fetchSizeAvailability(s); // NEW: запрос наличия при выборе размера
+                                  fetchSizeAvailability(s);
                                 }}
                               >
                                 {s}
@@ -593,7 +627,6 @@ export default function StoneDailyReport() {
                           </div>
                         )}
 
-                        {/* NEW: вывод наличия под выпадающим списком */}
                         {sizeInput && sizeAvailability !== null && (
                           <div
                             style={{
@@ -610,6 +643,7 @@ export default function StoneDailyReport() {
                           </div>
                         )}
                       </div>
+
                       <div
                         className="daily-field"
                         style={{ position: "relative" }}
@@ -672,6 +706,7 @@ export default function StoneDailyReport() {
                           </div>
                         )}
                       </div>
+
                       <div
                         className="daily-field"
                         style={{ position: "relative" }}
@@ -696,6 +731,7 @@ export default function StoneDailyReport() {
                           </button>
                         )}
                       </div>
+
                       {formError && (
                         <div
                           style={{
@@ -710,6 +746,7 @@ export default function StoneDailyReport() {
                           {formError}
                         </div>
                       )}
+
                       <div className="daily-flex">
                         <button
                           className="daily-btn-main"
@@ -728,7 +765,7 @@ export default function StoneDailyReport() {
                             setFormError("");
                             setSizeInput("");
                             setVidInput("");
-                            setSizeAvailability(null); // NEW
+                            setSizeAvailability(null);
                           }}
                         >
                           Завершить редактирование
