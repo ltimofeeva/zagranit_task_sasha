@@ -97,43 +97,50 @@ export default function StoneDailyReport() {
 
   // вебхук для получения наличия по размеру
   const fetchSizeAvailability = async (size) => {
-    if (!size) {
+  if (!size) {
+    setSizeAvailability(null);
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      "https://lpaderina.store/webhook/size_availability",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size }),
+      }
+    );
+
+    if (!res.ok) {
       setSizeAvailability(null);
       return;
     }
 
-    try {
-      const res = await fetch(
-        "https://lpaderina.store/webhook/size_availability",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ size }),
-        }
-      );
+    const data = await res.json();
 
-      if (!res.ok) {
-        setSizeAvailability(null);
-        return;
+    // адаптация под аутпут n8n: [ { qty: 5 } ]
+    let qty = null;
+
+    if (Array.isArray(data) && data.length > 0) {
+      const first = data[0];
+      if (first && typeof first === "object" && "qty" in first) {
+        qty = first.qty;
       }
-
-      const data = await res.json();
-
-      // адаптируй под реальный ответ вебхука
-      let qty = null;
-      if (typeof data === "number") {
-        qty = data;
-      } else if (data.qty !== undefined) {
-        qty = data.qty;
-      } else if (data.available !== undefined) {
-        qty = data.available;
-      }
-
-      setSizeAvailability(qty);
-    } catch (e) {
-      setSizeAvailability(null);
+    } else if (typeof data === "number") {
+      // запасной вариант, если когда-нибудь вернёшь просто число
+      qty = data;
+    } else if (data && typeof data === "object" && "qty" in data) {
+      // или объект { qty: 5 }
+      qty = data.qty;
     }
-  };
+
+    setSizeAvailability(qty);
+  } catch (e) {
+    setSizeAvailability(null);
+  }
+};
+
 
   // форматирование даты для бэка (DD.MM.YYYY)
   const formatDateForBackend = (isoDate) => {
